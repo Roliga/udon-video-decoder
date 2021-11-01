@@ -1,0 +1,3 @@
+*.meta
+!/Blanks/*.meta
+!/Render Textures/*.meta

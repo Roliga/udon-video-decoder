@@ -17,6 +17,7 @@ using UdonSharpEditor;
 
 [RequireComponent(typeof(VRCUnityVideoPlayer))]
 [RequireComponent(typeof(Camera))]
+[UdonBehaviourSyncMode(BehaviourSyncMode.None)]
 public class VideoDecoder : UdonSharpBehaviour
 {
     public Texture2D texture2D;
@@ -27,9 +28,10 @@ public class VideoDecoder : UdonSharpBehaviour
     private bool updateData;
 
     private UdonSharpBehaviour cbBehaviour;
-    private string cbkVariable;
+    private string cbField;
     private string cbMethod;
-    private string cbMethodError;
+    private string cbErrorField;
+    private string cbErrorMethod;
 
     private VRCUnityVideoPlayer videoPlayer;
 
@@ -62,7 +64,11 @@ public class VideoDecoder : UdonSharpBehaviour
         Debug.Log("[VideoDecoder] Download failed: " + videoError);
 #endif
 
-        cbBehaviour.SendCustomEvent(cbMethodError);
+        videoPlayer.Stop();
+        if(cbErrorField != null)
+            cbBehaviour.SetProgramVariable(cbErrorField, videoError);
+        if (cbErrorMethod != null)
+            cbBehaviour.SendCustomEvent(cbErrorMethod);
     }
 
     public void OnPostRender()
@@ -107,24 +113,19 @@ public class VideoDecoder : UdonSharpBehaviour
             + " ms");
 #endif
 
-        cbBehaviour.SetProgramVariable(cbkVariable, bytes);
-        cbBehaviour.SendCustomEvent(cbMethod);
+        if (cbField != null)
+            cbBehaviour.SetProgramVariable(cbField, bytes);
+        if (cbMethod != null)
+            cbBehaviour.SendCustomEvent(cbMethod);
     }
 
-    public string StringFromByteArray(byte[] bytes)
-    {
-        char[] c = new char[bytes.Length];
-        for (int i = 0; i < bytes.Length; i++)
-            c[i] = Convert.ToChar(bytes[i]);
-        return new string(c);
-    }
-
-    public void LoadURL(VRCUrl url, UdonSharpBehaviour callbackBehaviour, string callbackVariable, string callbackMethod = null, string callbackMethodError = null)
+    public void LoadURL(VRCUrl url, UdonSharpBehaviour callbackBehaviour, string callbackField, string callbackMethod, string callbackErrorField, string callbackErrorMethod)
     {
         cbBehaviour = callbackBehaviour;
-        cbkVariable = callbackVariable;
+        cbField = callbackField;
         cbMethod = callbackMethod;
-        cbMethodError = callbackMethodError;
+        cbErrorField = callbackErrorField;
+        cbErrorMethod = callbackErrorMethod;
 
 #if VIDEO_DECODER_DEBUG
         videoLoadStart = DateTime.Now;
@@ -132,6 +133,12 @@ public class VideoDecoder : UdonSharpBehaviour
 #endif
 
         videoPlayer.LoadURL(url);
+    }
+
+    public void CancelLoad()
+    {
+        videoPlayer.Stop();
+        updateData = false;
     }
 }
 
@@ -212,6 +219,8 @@ public class VideoDecoderEditor : Editor
                 EditorGUILayout.HelpBox($"Blank Texture and Render Texture sizes must match!", MessageType.Error);
             else if (bt.width % 8 != 0 || bt.height % 8 != 0)
                 EditorGUILayout.HelpBox($"Texture width and height must be divisable by 8!", MessageType.Error);
+            else if (bt.isReadable)
+                EditorGUILayout.HelpBox($"Blank texture must have Read/Write enabled, and Compression must be set to None!", MessageType.Error);
         }
         else
         {
